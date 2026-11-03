@@ -50,3 +50,13 @@
 ばね爪はPETGでの試作を想定。薄い蓋を1枚印刷する前に、`lid_snap_coupon` で実物の底面穴への掛かりと外しやすさを確認できる。レール、プレートのポケット、床のハニカム、天底板の接合にはそれぞれ `rail_coupon`、`plate_coupon`、`honey_coupon`、`panel_joint_coupon` を使う。
 
 標準寸法の追加部品はOpenSCADでレンダリングし、携行時の部品同士の位置関係と、底面に蓋を付けたドロワの引き出し経路を確認した。蓋厚は0.8 mmで、最下段の蓋と底板ストッパーの隙間は設計上0.2 mm。印刷後は空のドロワで反り・摺動・爪の掛かりを確かめる。携行時の保持力や繰り返し脱着に対する耐久性は未測定。
+
+## ライセンス
+
+本リポジトリのOpenSCAD設計データ、STL、画像、ドキュメントは、[Creative Commons 表示-継承 4.0 国際（CC BY-SA 4.0）](https://creativecommons.org/licenses/by-sa/4.0/)で提供する。ライセンス全文は[LICENSE](LICENSE)を参照。
+
+クレジット表記例
+
+> [FAIZ Trussed Cabinet](https://github.com/gefox00/faiz-trussed-cabinet) — gefox00（[CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)）
+
+変更して再配布する場合は、変更内容も記載する。
