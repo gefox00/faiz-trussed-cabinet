@@ -8,6 +8,7 @@
 // 2026-11-03: Add keyed, printed-only front stops for the bottom sliding joints.
 // 2026-11-03: Add top-panel stops with extended noses, fitted from above.
 // 2026-11-03: Add a transport lid, removable front gate/frame/clips, and underside stow snaps.
+// 2026-11-23: Add a two-level deep drawer, mixed layouts and a taller transport gate.
 
 // Transport kit: print 1 lid, 1 front gate, 1 frame and 4 identical lock clips.
 // Fit the gate behind the handle, seat the lid with its snap pegs UP, place the
@@ -18,16 +19,21 @@
 // PETG spring geometry is a trial design; use lid_snap_coupon to tune the fit.
 // Confirm holding force and distortion on physical parts before loaded transport.
 
-part = "assembly"; // [assembly,left,right,top,bottom,drawer,drawer_plate,tie_bar,rail_coupon,plate_coupon,honey_coupon,panel_joint_coupon,rail_stop_left,rail_stop_right,rail_stops,top_rail_stop_left,top_rail_stop_right,top_rail_stops,drawer_lid,lid_front_gate,lid_transport_frame,lid_lock_clip,drawer_transport,drawer_lid_stored,lid_snap_coupon]
+part = "assembly"; // [assembly,left,right,top,bottom,drawer,drawer_plate,drawer_deep,drawer_deep_plate,tie_bar,rail_coupon,plate_coupon,honey_coupon,panel_joint_coupon,rail_stop_left,rail_stop_right,rail_stops,top_rail_stop_left,top_rail_stop_right,top_rail_stops,drawer_lid,lid_front_gate,lid_front_gate_deep,lid_transport_frame,lid_lock_clip,drawer_transport,drawer_deep_transport,drawer_lid_stored,drawer_deep_lid_stored,lid_snap_coupon]
 $fn = 64;
 exploded = 0;
 show_all_drawers = true;
 
-drawer_count = 4;
+drawer_count = 4; // Cabinet rail levels. A deep drawer occupies two levels.
 levels = max(1, floor(drawer_count));
+// Bottom-to-top physical drawers. Empty means one standard drawer per level.
+// Examples for four levels: [2,1,1], [1,1,2], [2,2]. Sum must equal drawer_count.
+drawer_spans = [];
+assembly_spans = len(drawer_spans) == 0 ? [for (i=[0:levels-1]) 1] : drawer_spans;
 preview_pulled_drawer = -1;
-pulled_drawer_index = preview_pulled_drawer < 0 ? levels - 1
-    : min(levels - 1, max(0, floor(preview_pulled_drawer)));
+// Physical drawer index, bottom=0, -1=top, independent of its occupied levels.
+pulled_drawer_index = preview_pulled_drawer < 0 ? len(assembly_spans) - 1
+    : min(len(assembly_spans) - 1, max(0, floor(preview_pulled_drawer)));
 
 grid_pitch = 42;
 grid_x = 5;
@@ -66,6 +72,7 @@ drawer_h = 38;
 drawer_gap = 2;
 bottom_clearance = 3;
 level_pitch = drawer_h + drawer_gap;
+deep_drawer_h = drawer_h + level_pitch; // 78 mm at the standard 40 mm pitch.
 tray_bottom_t = 2.4;
 drawer_back_t = 3.2;
 front_lip_t = 3.2;
@@ -325,17 +332,23 @@ module side_groove(left = true) {
         cylinder(h=rail_entry+0.2,r=groove_r+0.6);
 }
 
-module drawer(include_plate = false) {
+function drawer_height(span = 1) = drawer_h + (span-1)*level_pitch;
+function drawer_start_level(index, spans = assembly_spans) =
+    index <= 0 ? 0 : drawer_start_level(index-1,spans) + spans[index-1];
+
+module drawer(include_plate = false, span = 1) {
+    assert(span == 1 || span == 2, "Drawer span must be 1 or 2 levels");
+    height = drawer_height(span);
     difference() {
         // Group the shell before subtracting the many honeycomb holes (F5 preview).
         render(convexity=8) union() {
             cube([tray_w,tray_d,tray_bottom_t]);
             translate([0,0,tray_bottom_t])
-                cube([drawer_side_t,tray_d,drawer_h-tray_bottom_t]);
+                cube([drawer_side_t,tray_d,height-tray_bottom_t]);
             translate([tray_w-drawer_side_t,0,tray_bottom_t])
-                cube([drawer_side_t,tray_d,drawer_h-tray_bottom_t]);
+                cube([drawer_side_t,tray_d,height-tray_bottom_t]);
             translate([0,tray_d-drawer_back_t,tray_bottom_t])
-                cube([tray_w,drawer_back_t,drawer_h-tray_bottom_t]);
+                cube([tray_w,drawer_back_t,height-tray_bottom_t]);
             translate([0,0,tray_bottom_t])
                 cube([tray_w,front_lip_t,front_lip_h]);
             translate([tray_w/2,-handle_forward+handle_depth,handle_bottom_z])
@@ -355,6 +368,12 @@ module drawer(include_plate = false) {
         }
         side_groove(true);
         side_groove(false);
+        // A second through-groove clears the occupied upper rail, including
+        // its flared front entry and its passage through the drawer back.
+        if (span == 2) translate([0,0,level_pitch]) {
+            side_groove(true);
+            side_groove(false);
+        }
         honeycomb_holes();
         translate([(tray_w-baseplate_w)/2,(tray_d-baseplate_d)/2,
                    tray_bottom_t-plate_pocket_depth])
@@ -758,7 +777,7 @@ module installed_lid_clips() {
 }
 
 // Front gate slides into the existing gap behind the arch handle.
-module lid_front_gate() {
+module lid_front_gate(height = drawer_h) {
     gate_y = -handle_forward+handle_depth+lid_fit;
     gate_t = -lid_fit-gate_y;
     gate_x = drawer_side_t+lid_fit;
@@ -768,7 +787,7 @@ module lid_front_gate() {
         difference() {
             union() {
                 translate([gate_x,gate_y,lip_top-0.6])
-                    cube([gate_w,gate_t,drawer_h-(lip_top-0.6)]);
+                    cube([gate_w,gate_t,height-(lip_top-0.6)]);
                 translate([tray_w/2-32,gate_y,tray_bottom_t+2.4])
                     cube([64,gate_t,lip_top-(tray_bottom_t+2.4)]);
             }
@@ -787,26 +806,29 @@ module lid_front_gate() {
         for (x = [tray_w/2-24,tray_w/2+24])
             translate([x-4,-1,lip_top]) cube([8,front_lip_t-1.25+1,1.6]);
         // The locked lid captures this flange from above.
-        translate([gate_x,gate_y,drawer_h-1.6])
+        translate([gate_x,gate_y,height-1.6])
             cube([gate_w,front_lip_t-lid_fit-gate_y,1.6]);
     }
 }
 
-module lid_front_gate_print() {
+module lid_front_gate_print(height = drawer_h) {
     translate([0,0,handle_forward-handle_depth-lid_fit])
-        rotate([90,0,0]) lid_front_gate();
+        rotate([90,0,0]) lid_front_gate(height);
 }
 
-module lid_transport_kit() {
-    color("Khaki") translate([0,0,drawer_h]) drawer_lid();
-    color("DarkSlateGray") translate([0,0,lid_frame_z()]) lid_frame();
-    color("Coral") lid_front_gate();
-    color("SandyBrown") installed_lid_clips();
+module lid_transport_kit(span = 1) {
+    height = drawer_height(span);
+    lift = height-drawer_h;
+    color("Khaki") translate([0,0,height]) drawer_lid();
+    color("DarkSlateGray") translate([0,0,lid_frame_z()+lift]) lid_frame();
+    color("Coral") lid_front_gate(height);
+    // On a deep drawer the same clips catch the upper rail groove.
+    color("SandyBrown") translate([0,0,lift]) installed_lid_clips();
 }
 
-module drawer_transport() {
-    color("LightSteelBlue") drawer(false);
-    lid_transport_kit();
+module drawer_transport(span = 1) {
+    color("LightSteelBlue") drawer(false,span);
+    lid_transport_kit(span);
 }
 
 module lid_snap_coupon() {
@@ -820,6 +842,10 @@ module lid_snap_coupon() {
 }
 
 module assembly() {
+    assert(drawer_start_level(len(assembly_spans)) == levels,
+        "drawer_spans must add up to drawer_count rail levels");
+    for (span = assembly_spans)
+        assert(span == 1 || span == 2, "drawer_spans accepts only 1 or 2");
     color("DimGray") translate([-panel_side_overhang,0,0])
         bottom_panel();
     color("SlateGray") translate([0,0,panel_t+exploded])
@@ -834,15 +860,16 @@ module assembly() {
     color("IndianRed") installed_rail_stops();
     color("IndianRed") installed_rail_stops(true);
 
-    for (i=[0:levels-1]) if (show_all_drawers || i==0) {
+    for (i=[0:len(assembly_spans)-1]) if (show_all_drawers || i==0) {
+        start = drawer_start_level(i);
         pull = i==pulled_drawer_index ? 32 : 0;
         color(i==pulled_drawer_index ? "Orange" : "LightSteelBlue")
             translate([wall_t+drawer_clearance,-pull-i*exploded*0.25,
-                       panel_t+bottom_clearance+i*level_pitch])
-                drawer(false);
+                       panel_t+bottom_clearance+start*level_pitch])
+                drawer(false,assembly_spans[i]);
         if (i==pulled_drawer_index)
             translate([wall_t+drawer_clearance,-pull-i*exploded*0.25,
-                       panel_t+bottom_clearance+i*level_pitch]) {
+                       panel_t+bottom_clearance+start*level_pitch]) {
                 if (lid_preview=="stored") color("Khaki") stored_drawer_lid();
             }
     }
@@ -860,6 +887,8 @@ else if (part=="top") top_panel();
 else if (part=="bottom") bottom_panel();
 else if (part=="drawer") drawer(false);
 else if (part=="drawer_plate") drawer(true);
+else if (part=="drawer_deep") drawer(false,2);
+else if (part=="drawer_deep_plate") drawer(true,2);
 else if (part=="rail_coupon") rail_coupon();
 else if (part=="plate_coupon") plate_coupon();
 else if (part=="honey_coupon") honey_coupon();
@@ -883,21 +912,29 @@ else if (part=="top_rail_stops") {
 }
 else if (part=="drawer_lid") drawer_lid();
 else if (part=="lid_front_gate") lid_front_gate_print();
+else if (part=="lid_front_gate_deep") lid_front_gate_print(deep_drawer_h);
 else if (part=="lid_transport_frame") lid_frame_print();
 else if (part=="lid_lock_clip") lid_lock_clip();
 else if (part=="drawer_transport") drawer_transport();
+else if (part=="drawer_deep_transport") drawer_transport(2);
 else if (part=="drawer_lid_stored") {
     drawer(false);
     color("Khaki") stored_drawer_lid();
 }
 else if (part=="lid_snap_coupon") lid_snap_coupon();
+else if (part=="drawer_deep_lid_stored") {
+    drawer(false,2);
+    color("Khaki") stored_drawer_lid();
+}
 else echo("Unknown part selector",part);
 
-echo("Drawers",levels,"pitch",level_pitch);
+echo("Rail levels",levels,"pitch",level_pitch);
+echo("Drawer spans",assembly_spans,"physical drawers",len(assembly_spans));
 echo("Grid size",grid_w,grid_d);
 echo("Cabinet",outer_w,outer_d,outer_h,"panel width",panel_w);
 echo("Snap fitting",snap_root_w,snap_head_w,snap_depth,"clearance",snap_clearance);
 echo("Drawer outside",tray_w,tray_d,drawer_h);
+echo("Deep drawer outside",tray_w,tray_d,deep_drawer_h,"occupied levels",2);
 echo("Drawer inside",tray_w-2*drawer_side_t,
      tray_d-front_lip_t-drawer_back_t,"plate",baseplate_w,baseplate_d);
 echo("Truss",truss_end_post,truss_chord,truss_rail_chord,truss_diag);
